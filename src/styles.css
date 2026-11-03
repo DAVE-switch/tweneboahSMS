@@ -1,0 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Manrope', 'DM Sans', ui-sans-serif, sans-serif;
+  --color-forest-950: #14362d;
+  --color-forest-900: #173d32;
+  --color-forest-800: #1e5141;
+  --color-forest-700: #28694f;
+  --color-gold-500: #c8943c;
+  --color-paper: #f7f8f5;
+}
+
+* { box-sizing: border-box; }
+html { min-width: 360px; background: #f7f8f5; }
+body { margin: 0; font-family: var(--font-sans); color: #1c3029; background: #f7f8f5; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+::selection { color: #163a2f; background: #dfebdf; }
+:root [class~="text-[7px]"] { font-size: 9px; }
+:root [class~="text-[8px]"] { font-size: 10px; }
+:root [class~="text-[9px]"] { font-size: 11px; }
+:root [class~="text-[10px]"] { font-size: 12px; }
+:root [class~="text-[11px]"] { font-size: 13px; }
+:root [class~="text-[12px]"] { font-size: 14px; }
+.form-control { width: 100%; min-width: 0; border: 1px solid #dfe5e1; border-radius: 9px; background: #fff; padding: 10px 11px; color: #263b33; font-size: 13px; min-height: 42px; outline: none; transition: border-color .15s, box-shadow .15s; }
+.form-control::placeholder { color: #a5aea8; }
+.form-control:focus { border-color: #6fa58a; box-shadow: 0 0 0 3px rgb(40 105 79 / 9%); }
+.form-control:disabled { cursor: not-allowed; background: #f8faf9; color: #9aa49e; }
+select.form-control { padding-right: 30px; }
+textarea.form-control { line-height: 1.55; }
+
+@media print {
+  @page { size: 80mm auto; margin: 7mm; }
+  body.printing * { visibility: hidden !important; }
+  body.printing .print-receipt, body.printing .print-receipt * { visibility: visible !important; }
+  body.printing .print-receipt { position: absolute !important; inset: 0 auto auto 0; width: 100%; box-shadow: none !important; border: 0 !important; }
+  body.printing .print-hide { display: none !important; }
+}

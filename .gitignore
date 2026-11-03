@@ -1,0 +1,11 @@
+node_modules/
+dist/
+school.sqlite
+school.sqlite-shm
+school.sqlite-wal
+.env
+.env.*
+!.env.example
+.vercel/
+.tools/
+.logs/

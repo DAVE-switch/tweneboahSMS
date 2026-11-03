@@ -1,0 +1,31 @@
+{
+  "name": "twk-royal-academy-management",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private student and fee records system for Tweneboah Koduah Royal Academy",
+  "scripts": {
+    "start": "node --experimental-sqlite server.js",
+    "start:mysql": "node --env-file-if-exists=.env server.mysql.js",
+    "server:watch": "node --watch --experimental-sqlite server.js",
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "db:inspect": "node --experimental-sqlite scripts/inspect-db.js",
+    "db:import:mysql": "node --experimental-sqlite --env-file-if-exists=.env scripts/migrate-sqlite-to-mysql.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "lucide-react": "^1.0.0",
+    "mysql2": "^3.24.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.2.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.5"
+  }
+}
