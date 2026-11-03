@@ -5,20 +5,21 @@
   "description": "Private student and fee records system for Tweneboah Koduah Royal Academy",
   "scripts": {
     "start": "node --experimental-sqlite server.js",
-    "start:mysql": "node --env-file-if-exists=.env server.mysql.js",
+    "start:neon": "node --env-file-if-exists=.env server.neon.js",
     "server:watch": "node --watch --experimental-sqlite server.js",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "db:inspect": "node --experimental-sqlite scripts/inspect-db.js",
-    "db:import:mysql": "node --experimental-sqlite --env-file-if-exists=.env scripts/migrate-sqlite-to-mysql.js"
+    "db:import:neon": "node --experimental-sqlite --env-file-if-exists=.env scripts/migrate-sqlite-to-neon.js"
   },
   "engines": {
-    "node": "22.x"
+    "node": ">=22.13"
   },
   "dependencies": {
+    "@vercel/functions": "^3.10.6",
     "lucide-react": "^1.0.0",
-    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

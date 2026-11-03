@@ -12,6 +12,8 @@ C:\Users\AYOMIDE\Documents\ChatGPT\tkcollection\school.sqlite
 
 The database is not a web page. It is a local SQLite file. The app's database migration runs when the backend starts and records completed migrations in `schema_migrations`.
 
+For a live Vercel deployment, the app will use Neon PostgreSQL. Neon provides a SQL editor in its dashboard to inspect tables and records. The local SQLite file is imported once with `npm run db:import:neon`; keep it as a backup until the live records have been checked.
+
 ## Quick table summary
 
 Open PowerShell in the project folder and run:
@@ -37,4 +39,4 @@ The additions are in `migrations/002-school-structure.sql`. The migration keeps 
 
 ## See the interface changes
 
-The React interface source is in `src/App.jsx` and `src/styles.css`. Once dependencies install successfully, run the backend with `npm start` and the frontend with `npm run dev` in separate PowerShell windows. Open `http://localhost:5173`.
+The React interface source is in `src/App.jsx` and `src/styles.css`. For local SQLite development, run the backend with `npm start` and the frontend with `npm run dev` in separate PowerShell windows. Open `http://localhost:5173`. For the Neon backend, see `docs/live-launch-plan.md`.

@@ -59,22 +59,22 @@ Then open <http://localhost:3002>.
 
 The database is local and persistent. Back up `school.sqlite` regularly. Keep it out of shared or public folders because it contains children's personal and school fee records.
 
-## Prepare MySQL for live hosting
+## Prepare Neon for live hosting
 
-The original SQLite setup remains available for local development. The MySQL 8 backend uses `server.mysql.js`; its Vercel function entry point is `api/[...path].js`. The schema is in `migrations/mysql-schema.sql`. Copy `.env.example` to `.env`, set `DATABASE_URL` and `MYSQL_SSL`, then run `npm run db:import:mysql` to create the MySQL schema and import the existing SQLite data. The importer refuses a non-empty target and leaves `school.sqlite` untouched. Start the MySQL version locally with `npm run start:mysql`.
+The original SQLite setup remains available for local development. The production backend uses Neon PostgreSQL through `server.neon.js`; Vercel invokes it through `api/[...path].js`. The schema is in `migrations/neon-schema.sql`. Set `DATABASE_URL` to Neon's pooled connection string for the app. For initial import, set `DATABASE_URL_UNPOOLED` to the direct connection string and run `npm run db:import:neon`. The importer refuses a non-empty target and leaves `school.sqlite` untouched. Start the Neon version locally with `npm run start:neon`.
 
-Vercel hosts the app and API functions; MySQL must be provided by a separate managed database host. Do not add `.env` to source control or share its database credentials. The project has not been connected to a production database or deployed. Review [the live launch plan](docs/live-launch-plan.md) before moving school records online.
+Vercel hosts the app and API functions, and Neon provides PostgreSQL. Do not add `.env` to source control or share its database credentials. The project has not been connected to a production database or deployed. Review [the live launch plan](docs/live-launch-plan.md) before moving school records online.
 
 ## Project files
 
 - `server.js` — Node HTTP server, SQLite schema, session authentication, student/payment APIs and initial account creation.
-- `server.mysql.js` — MySQL-backed version of the same API for hosting.
-- `api/[...path].js` — Vercel serverless entry point for the MySQL API.
+- `server.neon.js` — Neon/PostgreSQL-backed version of the same API for hosting.
+- `api/[...path].js` — Vercel serverless entry point for the Neon API.
 - `src/` — React school office screens and Tailwind CSS styles.
 - `vite.config.mjs` — React/Tailwind build configuration and local API proxy.
 - `migrations/002-school-structure.sql` — additive schema for classes, academic years, guardians, enrolments, status history, fees and invoices.
 - `scripts/inspect-db.js` — read-only table and row-count summary.
-- `scripts/migrate-sqlite-to-mysql.js` — guarded first import from SQLite to an empty MySQL database.
+- `scripts/migrate-sqlite-to-neon.js` — guarded first import from SQLite to an empty Neon database.
 - `public/` — supplied school logo and other static assets.
 - `docs/receipt-reference.jpg` — supplied receipt photograph used as the layout reference.
 - `school.sqlite` — created automatically on first launch; do not commit live school data.

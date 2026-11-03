@@ -2,7 +2,8 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const mysql = require('mysql2/promise');
+const { Pool, types } = require('pg');
+const { attachDatabasePool } = require('@vercel/functions');
 
 const ROOT = __dirname;
 const STATIC_ROOT = fs.existsSync(path.join(ROOT, 'dist')) ? path.join(ROOT, 'dist') : path.join(ROOT, 'public');
@@ -10,18 +11,41 @@ const PORT = Number(process.env.PORT || 3002);
 const DATABASE_URL = process.env.DATABASE_URL;
 const mime = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.jpg':'image/jpeg','.png':'image/png','.svg':'image/svg+xml' };
 
+types.setTypeParser(20, value => Number(value));
+types.setTypeParser(1700, value => Number(value));
+types.setTypeParser(1082, value => value);
+const idTables = new Set(['users','classes','academic_years','students','guardians','enrollments','student_status_history','fee_structures','invoices','invoice_items','payments','receipts','audit_logs']);
+function postgresSql(sql) {
+  let text = sql.trim().replace(/;$/, '');
+  text = text.replace(/DATE_FORMAT\(paid_at,'%Y-%m'\)/gi, "TO_CHAR(paid_at,'YYYY-MM')");
+  text = text.replace(/DATE_FORMAT\(CURDATE\(\),'%Y-%m'\)/gi, "TO_CHAR(CURRENT_DATE,'YYYY-MM')");
+  text = text.replace(/CURDATE\(\)/gi, 'CURRENT_DATE').replace(/UTC_TIMESTAMP\(\)/gi, "(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')");
+  text = text.replace(/\bis_primary\s*=\s*1\b/gi, 'is_primary=TRUE').replace(/\bis_primary\s*=\s*0\b/gi, 'is_primary=FALSE');
+  text = text.replace(/VALUES\(\?,\?,\?,1\)/gi, 'VALUES(?,?,?,TRUE)');
+  const ignore = /^INSERT\s+IGNORE\s+INTO\s+/i.test(text);
+  text = text.replace(/^INSERT\s+IGNORE\s+INTO\s+/i, 'INSERT INTO ');
+  const insert = text.match(/^INSERT\s+INTO\s+([a-z_]+)/i);
+  if (ignore) text += ' ON CONFLICT DO NOTHING';
+  if (insert && idTables.has(insert[1].toLowerCase()) && !/\bRETURNING\b/i.test(text)) text += ' RETURNING id';
+  let index = 0;
+  text = text.replace(/\?/g, () => `$${++index}`);
+  return { text, isInsert: Boolean(insert) };
+}
 function createPool() {
-  let host,port,user,password,database;
-  if (DATABASE_URL) {
-    const url = new URL(DATABASE_URL);
-    if (!['mysql:','mysql2:'].includes(url.protocol)) throw new Error('DATABASE_URL must use mysql://');
-    ({hostname:host} = url); port=Number(url.port||3306); user=decodeURIComponent(url.username); password=decodeURIComponent(url.password); database=decodeURIComponent(url.pathname.replace(/^\//,''));
-  } else if (process.env.TIDB_HOST && process.env.TIDB_USER && process.env.TIDB_DATABASE) {
-    host=process.env.TIDB_HOST;port=Number(process.env.TIDB_PORT||4000);user=process.env.TIDB_USER;password=process.env.TIDB_PASSWORD;database=process.env.TIDB_DATABASE;
-  } else {
-    throw new Error('Set DATABASE_URL or the TIDB_HOST, TIDB_PORT, TIDB_USER, TIDB_PASSWORD and TIDB_DATABASE environment variables.');
-  }
-  return mysql.createPool({ host,port,user,password,database,waitForConnections:true,connectionLimit:Number(process.env.MYSQL_CONNECTION_LIMIT||3),queueLimit:20,decimalNumbers:true,dateStrings:true,timezone:'Z',ssl:process.env.MYSQL_SSL==='true'?{rejectUnauthorized:true}:undefined });
+  if (!DATABASE_URL) throw new Error('DATABASE_URL is required. Copy .env.example to .env and add the Neon pooled connection string.');
+  const pgPool = new Pool({ connectionString: DATABASE_URL, max: Number(process.env.PG_POOL_SIZE || 3), idleTimeoutMillis: 5000, connectionTimeoutMillis: 10000, ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: true } });
+  if (process.env.VERCEL) attachDatabasePool(pgPool);
+  const execute = async (client, sql, params = []) => {
+    const statement = postgresSql(sql);
+    const result = await client.query(statement.text, params);
+    return [statement.isInsert ? { insertId: Number(result.rows[0]?.id || 0), affectedRows: result.rowCount } : result.rows, []];
+  };
+  pgPool.execute = (sql, params) => execute(pgPool, sql, params);
+  pgPool.getConnection = async () => {
+    const client = await pgPool.connect();
+    return { execute: (sql, params) => execute(client, sql, params), beginTransaction: () => client.query('BEGIN'), commit: () => client.query('COMMIT'), rollback: () => client.query('ROLLBACK'), release: () => client.release() };
+  };
+  return pgPool;
 }
 const pool = createPool();
 const sendJson = (res,status,data,headers={}) => { res.writeHead(status,{'content-type':'application/json; charset=utf-8','x-content-type-options':'nosniff','cache-control':'no-store',...headers});res.end(JSON.stringify(data)); };
@@ -114,21 +138,21 @@ async function api(req,res,url){
   return sendJson(res,404,{error:'Not found.'});
 }
 
-async function seedFirstUsers(){const [rows]=await pool.execute('SELECT COUNT(*) AS n FROM users');if(Number(rows[0].n))return;for(const[name,email,role]of[['School Director','director@twk.local','Director'],['School Administrator','admin@twk.local','Administrator']]){const password=crypto.randomBytes(9).toString('base64url');const salt=crypto.randomBytes(16).toString('hex');const hash=crypto.scryptSync(password,salt,64).toString('hex');await pool.execute('INSERT INTO users(name,email,role,salt,password_hash) VALUES(?,?,?,?,?)',[name,email,role,salt,hash]);console.log(`Initial ${role} login: ${email} / ${password}`);}console.log('Save these credentials now; password hashes are stored in MySQL.');}
+async function seedFirstUsers(){const [rows]=await pool.execute('SELECT COUNT(*) AS n FROM users');if(Number(rows[0].n))return;for(const[name,email,role]of[['School Director','director@twk.local','Director'],['School Administrator','admin@twk.local','Administrator']]){const password=crypto.randomBytes(9).toString('base64url');const salt=crypto.randomBytes(16).toString('hex');const hash=crypto.scryptSync(password,salt,64).toString('hex');await pool.execute('INSERT INTO users(name,email,role,salt,password_hash) VALUES(?,?,?,?,?)',[name,email,role,salt,hash]);console.log(`Initial ${role} login: ${email} / ${password}`);}console.log('Save these credentials now; password hashes are stored in Neon.');}
 
-const server=http.createServer((req,res)=>{const url=new URL(req.url,`http://${req.headers.host||'localhost'}`);if(url.pathname.startsWith('/api/')){api(req,res,url).catch(error=>{console.error('MySQL API request failed:',error.message);if(!res.headersSent)sendJson(res,500,{error:'The server could not complete this request.'});else res.destroy();});return;}const requested=url.pathname==='/'?'/index.html':decodeURIComponent(url.pathname);const file=path.resolve(STATIC_ROOT,`.${requested}`);if(!file.startsWith(STATIC_ROOT+path.sep)&&file!==path.join(STATIC_ROOT,'index.html')){res.writeHead(403);return res.end('Forbidden');}fs.readFile(file,(error,data)=>{if(error){res.writeHead(404);return res.end('Not found');}res.writeHead(200,{'content-type':mime[path.extname(file)]||'application/octet-stream','x-content-type-options':'nosniff'});res.end(data);});});
+const server=http.createServer((req,res)=>{const url=new URL(req.url,`http://${req.headers.host||'localhost'}`);if(url.pathname.startsWith('/api/')){api(req,res,url).catch(error=>{console.error('Neon API request failed:',error.message);if(!res.headersSent)sendJson(res,500,{error:'The server could not complete this request.'});else res.destroy();});return;}const requested=url.pathname==='/'?'/index.html':decodeURIComponent(url.pathname);const file=path.resolve(STATIC_ROOT,`.${requested}`);if(!file.startsWith(STATIC_ROOT+path.sep)&&file!==path.join(STATIC_ROOT,'index.html')){res.writeHead(403);return res.end('Forbidden');}fs.readFile(file,(error,data)=>{if(error){res.writeHead(404);return res.end('Not found');}res.writeHead(200,{'content-type':mime[path.extname(file)]||'application/octet-stream','x-content-type-options':'nosniff'});res.end(data);});});
 
-async function start(){await pool.query('SELECT 1');await pool.query('SELECT version FROM schema_migrations LIMIT 1');await seedFirstUsers();server.listen(PORT,()=>console.log(`Tweneboah Koduah Royal Academy MySQL backend: http://localhost:${PORT}`));}
+async function start(){await pool.query('SELECT 1');await pool.query('SELECT version FROM schema_migrations LIMIT 1');await seedFirstUsers();server.listen(PORT,()=>console.log(`Tweneboah Koduah Royal Academy Neon backend: http://localhost:${PORT}`));}
 
 async function vercelHandler(req,res){
   const url=new URL(req.url,`https://${req.headers.host||'localhost'}`);
   if(!url.pathname.startsWith('/api/'))return sendJson(res,404,{error:'Not found.'});
-  try{return await api(req,res,url);}catch(error){console.error('MySQL API request failed:',error.message);if(!res.headersSent)return sendJson(res,500,{error:'The server could not complete this request.'});res.destroy();}
+  try{return await api(req,res,url);}catch(error){console.error('Neon API request failed:',error.message);if(!res.headersSent)return sendJson(res,500,{error:'The server could not complete this request.'});res.destroy();}
 }
 
 module.exports=vercelHandler;
 module.exports.vercelHandler=vercelHandler;
 
 if(require.main===module){
-  start().catch(async error=>{console.error(`MySQL backend did not start: ${error.message}`);console.error('Run the SQLite-to-MySQL migration after configuring DATABASE_URL, then start the MySQL backend.');await pool.end().catch(()=>{});process.exitCode=1;});
+  start().catch(async error=>{console.error(`Neon backend did not start: ${error.message}`);console.error('Run the SQLite-to-Neon migration after configuring DATABASE_URL, then start the Neon backend.');await pool.end().catch(()=>{});process.exitCode=1;});
 }
